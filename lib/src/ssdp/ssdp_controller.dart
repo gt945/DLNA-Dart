@@ -8,7 +8,7 @@ typedef NetworkInterfacesFactory = Future<Iterable<NetworkInterface>> Function(
 
 typedef RawDatagramSocketFactory = Future<RawDatagramSocket> Function(
     dynamic host, int port,
-    {bool reuseAddress, bool reusePort, int ttl});
+    {required bool reuseAddress, required bool reusePort, required int ttl});
 
 class SSDPController {
   static const String UPNP_IP_V4 = '239.255.255.250';
@@ -32,11 +32,11 @@ class SSDPController {
   bool _starting = false;
   bool _started = false;
 
-  InternetAddress _address;
-  int _port;
-  Timer _timer;
-  RawDatagramSocket _incoming;
-  final List<RawDatagramSocket> _sockets = <RawDatagramSocket>[];
+  late InternetAddress _address;
+  late int _port;
+  Timer? _timer;
+  RawDatagramSocket? _incoming;
+  final List<RawDatagramSocket?> _sockets = <RawDatagramSocket?>[];
   final RawDatagramSocketFactory _rawDatagramSocketFactory;
   final StreamController<String> controller = StreamController<String>();
 
@@ -63,7 +63,7 @@ class SSDPController {
     _sockets.add(_incoming);
 
     final List<NetworkInterface> interfaces =
-        await allInterfacesFactory(InternetAddress.anyIPv4.type);
+        await (allInterfacesFactory(InternetAddress.anyIPv4.type) as FutureOr<List<NetworkInterface>>);
     for (var interface in interfaces) {
       var targetAddress = interface.addresses[0];
       var socket = await _rawDatagramSocketFactory(
@@ -81,14 +81,14 @@ class SSDPController {
       ));
       _sockets.add(socket);
 
-      _incoming.multicastLoopback = false;
-      _incoming.multicastHops = 12;
+      _incoming!.multicastLoopback = false;
+      _incoming!.multicastHops = 12;
       final value = Uint8List.fromList(
           _address.rawAddress + interface.addresses[0].rawAddress);
-      _incoming
+      _incoming!
           .setRawOption(RawSocketOption(RawSocketOption.levelIPv4, 12, value));
     }
-    _incoming.listen(_handleIncoming);
+    _incoming!.listen(_handleIncoming);
     _started = true;
     _starting = false;
   }
@@ -101,11 +101,11 @@ class SSDPController {
       throw StateError('Cannot stop mDNS client while it is starting.');
     }
     if (_timer != null) {
-      _timer.cancel();
+      _timer!.cancel();
     }
     controller.close();
     for (var socket in _sockets) {
-      socket.close();
+      socket!.close();
     }
     _started = false;
   }
@@ -115,19 +115,19 @@ class SSDPController {
       throw StateError('mDNS client must be started before calling lookup.');
     }
     _sockets.forEach((socket) {
-      print('Sending from ${socket.address.address}:${socket.port}');
+      print('Sending from ${socket!.address.address}:${socket.port}');
     });
     var dataToSend = Utf8Codec().encode(DLNA_M_SEARCH);
     _timer = Timer.periodic(const Duration(milliseconds: 3000), (Timer t) {
       for (var socket in _sockets) {
-        socket.send(dataToSend, _address, _port);
+        socket!.send(dataToSend, _address, _port);
       }
     });
   }
 
   void _handleIncoming(RawSocketEvent event) {
     if (event == RawSocketEvent.read) {
-      var packet = _incoming.receive().data;
+      var packet = _incoming!.receive()!.data;
       var message = utf8.decode(packet);
       controller.add(message);
     }
